@@ -1,34 +1,41 @@
-from langgraph.graph import StateGraph, END
-from state import AgentState
-from agents import planner_agent, code_agent, final_agent, router_agent
-from IPython.display import Image, display
+from langgraph.graph import END, StateGraph
 
-def condition_for_code_agent(state: AgentState) -> bool:
-    print(f"Condition Check - Route Decision:{state['route_response'].reason}, Next Agent: {state['route_response'].next_agent}")
-    return state["route_response"].next_agent
+from agents import final_agent, node_get_schema, query_agent, router_agent
+from state import AgentState
+
+
+def route_by_router_response(state: AgentState) -> str:
+    """Return the next agent id chosen by the router agent."""
+    decision = state["route_response"].next_agent
+    print(
+        "Condition Check - Route Decision:"
+        f" {state['route_response'].reason}, Next Agent: {decision}"
+    )
+    return decision
 
 
 def build_graph() -> StateGraph[AgentState]:
    
     workflow = StateGraph(AgentState)
     
-    workflow.add_node("planner_agent", planner_agent)
-    workflow.add_node("code_agent", code_agent)
+
     workflow.add_node("final_agent", final_agent)
     workflow.add_node("router_agent", router_agent)
+    workflow.add_node("query_agent", query_agent)
+    workflow.add_node("node_get_schema", node_get_schema)
     
-    workflow.set_entry_point("planner_agent")
+    workflow.set_entry_point("node_get_schema")
     
-    workflow.add_edge("planner_agent", "router_agent")
-    workflow.add_edge("code_agent", "router_agent")
+    workflow.add_edge("node_get_schema", "router_agent")
+    workflow.add_edge("query_agent", "router_agent")
 
     workflow.add_conditional_edges(
-        "router_agent", 
-        condition_for_code_agent,
+        "router_agent",
+        route_by_router_response,
         {
-            "code_agent": "code_agent",
-            "final_agent": "final_agent"
-        }
+            "query_agent": "query_agent",
+            "final_agent": "final_agent",
+        },
     )
     
     workflow.add_edge("final_agent", END)

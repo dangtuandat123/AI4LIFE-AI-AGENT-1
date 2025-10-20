@@ -161,12 +161,26 @@ def summarize_spending_by_project() -> List[Dict[str, Any]]:
     return list(summary.values())
 
 
-def describe_workspace() -> List[Dict[str, Any]]:
+def describe_workspace() -> str:
     """
     Gọi hàm describe_workspace trong DB để lấy thông tin schema + số lượng bản ghi.
+    Trả về chuỗi có định dạng:
+      Table: <table> | rows=<row_count> | note=<table_comment>
+        - <column_name>: <data_type> (nullable=<is_nullable>, default=<column_default>, note=<comment>)
+        …
     """
     res = supabase.rpc("describe_workspace").execute()
-    return res.data or []
+    schema_info = res.data or []
+
+    lines: List[str] = []
+    for tbl in schema_info:
+        lines.append(f"Table: {tbl.get('table')} | rows={tbl.get('row_count')} | note={tbl.get('table_comment')}")
+        for col in tbl.get("columns", []):
+            lines.append(
+                f"  - {col.get('column_name')}: {col.get('data_type')} "
+                f"(nullable={col.get('is_nullable')}, default={col.get('column_default')}, note={col.get('comment')})"
+            )
+    return "\n".join(lines)
 
 
 def run_sql_query(sql: str) -> List[Dict[str, Any]]:
@@ -202,14 +216,8 @@ if __name__ == "__main__":
         print(row)
 
     schema_info = describe_workspace()
-    print("\n--- Mô tả schema (describe_workspace) ---")
-    for tbl in schema_info:
-        print(f"Table: {tbl['table']} | rows={tbl['row_count']} | note={tbl.get('table_comment')}")
-        for col in tbl["columns"]:
-            print(
-                f"  - {col['column_name']}: {col['data_type']} "
-                f"(nullable={col['is_nullable']}, default={col['column_default']}, note={col.get('comment')})"
-            )
+    print(schema_info)
+
 
     sql_demo = """
         select e.team_name,

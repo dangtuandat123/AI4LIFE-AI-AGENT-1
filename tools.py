@@ -1,12 +1,12 @@
 import json
 import os
+
 from dotenv import load_dotenv
 from langchain_core.tools import tool
-from utils import print_colored
-
-from typing import Optional, List, Dict, Any
-from dotenv import load_dotenv
 from pydantic import BaseModel, Field
+
+from supabase_tool import run_sql_query
+from utils import print_colored
 try:
     from langchain_tavily import TavilySearch as _TavilySearchTool
 except ImportError:  # Fallback for older environments
@@ -45,12 +45,12 @@ def _run_tavily(query: str) -> str:
 
 
 
-
 # khai bao structore cho tool 
 class SearchWebArgs(BaseModel):
     query: str = Field(..., description="Câu truy vấn để tìm kiếm trên Internet bằng Tavily.")
 
-
+class RunSupabaseSQLArgs(BaseModel):
+    sql_query: str = Field(..., description="Câu lệnh SQL cần thực thi trên cơ sở dữ liệu Supabase.")
 
 
 
@@ -69,3 +69,18 @@ def search_web(query: str) -> str:
     print_colored(results, "magenta")
     print(f"[Tool] search_web completed")
     return results
+
+
+@tool(
+    "run_supabase_sql",
+    description="Kiểm tra ngân sách có phù hợp hay không dựa trên các tiêu chí đã cho.",
+    return_direct=True,
+    args_schema=RunSupabaseSQLArgs,
+)
+def run_supabase_sql(sql_query: str) -> str:
+    print(f"[Tool] run_supabase_sql called with query: {sql_query}")
+    results = run_sql_query(sql_query)
+    pretty_results = json.dumps(results, ensure_ascii=False)
+    print_colored(pretty_results, "magenta")
+    print(f"[Tool] run_supabase_sql completed")
+    return pretty_results
