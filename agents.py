@@ -10,7 +10,7 @@ from prompts import (
 )
 from state import AgentState, FinalResponse, RouterResponse
 from supabase_tool import describe_workspace
-from tools import run_supabase_sql, search_web
+from tools import run_python_code, run_supabase_sql, search_web
 from utils import create_agent_basic, create_agent_react, invoke_with_retry, print_colored
 
 
@@ -83,7 +83,7 @@ def query_agent(state: AgentState) -> AgentState:
     print_colored("Query Agent Invoked", "green")
 
     agent = create_agent_react(
-        tools=[search_web, run_supabase_sql],
+        tools=[search_web, run_supabase_sql, run_python_code],
         system_prompt=SYSTEM_PROMPT_QUERY_AGENT,
     )
     conversation: List[BaseMessage] = list(state["messages"])

@@ -1,5 +1,7 @@
 import json
+import math
 import os
+from typing import Any, Dict
 
 from dotenv import load_dotenv
 from langchain_core.tools import tool
@@ -55,6 +57,17 @@ class RunSupabaseSQLArgs(BaseModel):
     sql_query: str = Field(..., description="Câu lệnh SQL cần thực thi trên cơ sở dữ liệu Supabase.")
 
 
+class ExecutePythonArgs(BaseModel):
+    code: str = Field(
+        ...,
+        description=(
+            "Đoạn mã Python ngắn (không import thư viện bên ngoài) dùng để tính toán, "
+            "ví dụ tổng hợp số liệu, kiểm tra logic hoặc format dữ liệu. "
+            "Phải an toàn, không được thao tác file hệ thống hoặc mạng."
+        ),
+    )
+
+
 
 #khai bao tool 
 
@@ -102,3 +115,52 @@ def run_supabase_sql(sql_query: str) -> str:
         print_colored(pretty_error, "red")
         print(f"[Tool] run_supabase_sql failed")
         return f"[ERROR] Supabase query failed: {pretty_error}"
+
+
+@tool(
+    "run_python_code",
+    description="Chạy nhanh một đoạn code Python thuần để tính toán hoặc biến đổi dữ liệu.",
+    args_schema=ExecutePythonArgs,
+    return_direct=True,
+)
+def run_python_code(code: str) -> str:
+    """
+    Execute a small Python snippet for calculations. No external imports allowed.
+    """
+    print(f"[Tool] run_python_code received:\n{code}")
+    allowed_builtins = {
+        "abs": abs,
+        "min": min,
+        "max": max,
+        "sum": sum,
+        "len": len,
+        "round": round,
+        "sorted": sorted,
+        "enumerate": enumerate,
+        "range": range,
+        "zip": zip,
+        "math": math,
+    }
+    sandbox_globals = {"__builtins__": allowed_builtins}
+    sandbox_locals: Dict[str, Any] = {}
+
+    try:
+        compiled = compile(code, "<agent_code>", "exec")
+        exec(compiled, sandbox_globals, sandbox_locals)
+    except Exception as exc:  # pragma: no cover - guardrail
+        error_msg = f"[ERROR] Python execution failed: {exc}"
+        print_colored(error_msg, "red")
+        return error_msg
+
+    result = sandbox_locals.get("result")
+    if result is None:
+        result_repr = "[INFO] Python code ran successfully nhưng không có biến 'result'."
+    else:
+        try:
+            result_repr = json.dumps(result, ensure_ascii=False)
+        except TypeError:
+            result_repr = str(result)
+
+    print_colored(result_repr, "cyan")
+    print("[Tool] run_python_code completed")
+    return result_repr
