@@ -19,6 +19,7 @@ if __name__ == "__main__":
         "trong dự án SALES_SEP25 đã ký hợp đồng trị giá 180.000.000 VND với Công ty Z, "
         "thu 30% đặt cọc tương đương 54.000.000 VND và ghi nhận doanh thu này trong CRM "
         "với trạng thái approved."
+        "loai hoạt động: sales_deal."
     )
     result_state = run_app(sample_report)
     final_response = result_state.get("final_response")

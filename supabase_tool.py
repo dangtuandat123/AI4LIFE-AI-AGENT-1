@@ -371,3 +371,14 @@ if __name__ == "__main__":
                 print(row)
         else:
             print("  (no data)")
+    print(run_sql_query("""
+                        
+                        select sum(a.amount_value) as approved_spent
+from public.activities a
+join public.employees e on e.id = a.employee_id
+where e.team_name = 'Marketing'
+  and a.status = 'approved'
+  and a.activity_date between
+        '2025-10-25 05:45:00+00'::timestamptz and
+        '2025-10-25 05:45:00+00'::timestamptz
+"""))

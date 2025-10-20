@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
+from postgrest.exceptions import APIError
+
 from supabase_tool import run_sql_query
 from utils import print_colored
 try:
@@ -78,9 +80,25 @@ def search_web(query: str) -> str:
     args_schema=RunSupabaseSQLArgs,
 )
 def run_supabase_sql(sql_query: str) -> str:
-    print(f"[Tool] run_supabase_sql called with query: {sql_query}")
-    results = run_sql_query(sql_query)
-    pretty_results = json.dumps(results, ensure_ascii=False)
-    print_colored(pretty_results, "magenta")
-    print(f"[Tool] run_supabase_sql completed")
-    return pretty_results
+    raw_sql = sql_query.strip()
+    if raw_sql.endswith(";"):
+        raw_sql = raw_sql[:-1].rstrip()
+    print(f"[Tool] run_supabase_sql called with query: {raw_sql}")
+    try:
+        results = run_sql_query(raw_sql)
+        pretty_results = json.dumps(results, ensure_ascii=False)
+        print_colored(pretty_results, "magenta")
+        print(f"[Tool] run_supabase_sql completed")
+        return pretty_results
+    except APIError as exc:
+        error_payload = {
+            "error": exc.message or "Supabase API error",
+            "code": exc.code,
+            "details": exc.details,
+            "hint": exc.hint,
+            "sql": raw_sql,
+        }
+        pretty_error = json.dumps(error_payload, ensure_ascii=False)
+        print_colored(pretty_error, "red")
+        print(f"[Tool] run_supabase_sql failed")
+        return f"[ERROR] Supabase query failed: {pretty_error}"

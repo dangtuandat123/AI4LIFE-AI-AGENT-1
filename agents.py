@@ -1,4 +1,6 @@
-from langchain_core.messages import AIMessage, HumanMessage
+from typing import List
+
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from prompts import (
@@ -84,35 +86,59 @@ def query_agent(state: AgentState) -> AgentState:
         tools=[search_web, run_supabase_sql],
         system_prompt=SYSTEM_PROMPT_QUERY_AGENT,
     )
-    instruction_message = HumanMessage(
-        content=(
-            "Dựa vào yêu cầu ban đầu, hãy tạo câu lệnh SQL để truy vấn cơ sở dữ liệu Supabase "
-            "và kiểm tra ngân sách hiện tại có hợp lý hay không."
-        ),
-    )
-    messages_with_instruction = list(state["messages"]) + [instruction_message]
-    result_state = invoke_with_retry(
-        agent,
-        {"messages": messages_with_instruction},
-        state,
-        "Query Agent",
+    conversation: List[BaseMessage] = list(state["messages"])
+    conversation.append(
+        HumanMessage(
+            content=(
+                "Dựa vào yêu cầu ban đầu, hãy tạo câu lệnh SQL để truy vấn cơ sở dữ liệu Supabase "
+                "và kiểm tra ngân sách hiện tại có hợp lý hay không. "
+                "Nếu dữ liệu Supabase chưa đủ, hãy dùng thêm công cụ search_web để tìm thông tin hỗ trợ. "
+                "Nếu công cụ báo lỗi, bạn PHẢI đọc kỹ thông báo, sửa lại câu truy vấn và chạy lại. "
+                "Mọi phản hồi phải bằng tiếng Việt tự nhiên."
+            )
+        )
     )
 
-    if isinstance(result_state, dict) and "messages" in result_state:
-        state["messages"] = result_state["messages"]
-    else:
-        state["messages"] = messages_with_instruction
+    max_attempts = 3
+    last_ai_message: AIMessage | None = None
 
-    last_ai_message = next(
-        (msg for msg in reversed(state["messages"]) if isinstance(msg, AIMessage)),
-        None,
-    )
-    if last_ai_message is None:
-        raise RuntimeError("Query Agent did not return an AIMessage response.")
+    for attempt in range(1, max_attempts + 1):
+        result_state = invoke_with_retry(
+            agent,
+            {"messages": conversation},
+            state,
+            "Query Agent",
+        )
+        if isinstance(result_state, dict) and "messages" in result_state:
+            conversation = result_state["messages"]
 
-    state["agent_response"] = last_ai_message.content
+        last_ai_message = next(
+            (msg for msg in reversed(conversation) if isinstance(msg, AIMessage)),
+            None,
+        )
+        if last_ai_message is None:
+            raise RuntimeError("Query Agent did not return an AIMessage response.")
+
+        if "[ERROR] Supabase query failed" in last_ai_message.content and attempt < max_attempts:
+            print_colored(
+                f"Query Agent detected SQL error, prompting retry (attempt {attempt + 1}/{max_attempts}).",
+                "red",
+            )
+            conversation.append(
+                HumanMessage(
+                    content=(
+                        "Công cụ Supabase báo lỗi ở truy vấn vừa rồi. "
+                        "Hãy phân tích thông báo lỗi, điều chỉnh câu SQL cho đúng cú pháp và chạy lại ngay."
+                    )
+                )
+            )
+            continue
+        break
+
+    state["messages"] = conversation
+    state["agent_response"] = last_ai_message.content if last_ai_message else None
     state["agent_last"] = "query_agent"
-    print_colored(f"Query Agent Response:\n {last_ai_message.content}", "yellow")
+    print_colored(f"Query Agent Response:\n {state['agent_response']}", "yellow")
     return state
 
 
