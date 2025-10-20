@@ -15,11 +15,11 @@ def run_app(user_input: str) -> AgentState:
 
 if __name__ == "__main__":
     sample_report = (
-        "Ngày 22/09/2025 lúc 09:00 UTC, nhân viên 11111111-1111-1111-1111-111111111111 "
+        "Ngày 22/09/2025 lúc 09:00 UTC, nhân viên 11111111-1111-1111-1111-111111111111 thuộc team sale"
         "trong dự án SALES_SEP25 đã ký hợp đồng trị giá 180.000.000 VND với Công ty Z, "
         "thu 30% đặt cọc tương đương 54.000.000 VND và ghi nhận doanh thu này trong CRM "
-        "với trạng thái approved."
-        "loai hoạt động: sales_deal."
+        "với trạng thái approved. "
+        
     )
     result_state = run_app(sample_report)
     final_response = result_state.get("final_response")
