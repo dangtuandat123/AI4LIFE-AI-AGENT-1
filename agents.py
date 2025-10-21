@@ -5,6 +5,7 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from prompts import (
     SYSTEM_PROMPT_FINAL_AGENT,
+    SYSTEM_PROMPT_PLANNER_AGENT,
     SYSTEM_PROMPT_QUERY_AGENT,
     SYSTEM_PROMPT_ROUTER_AGENT,
 )
@@ -78,6 +79,31 @@ def router_agent(state: AgentState) -> AgentState:
     return state
 
 
+def planner_agent(state: AgentState) -> AgentState:
+    """Outline the plan for the upcoming query steps."""
+    print_colored("Planner Agent Invoked", "green")
+
+    llm = create_agent_basic()
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", SYSTEM_PROMPT_PLANNER_AGENT),
+            MessagesPlaceholder(variable_name="messages"),
+        ]
+    )
+    chain = prompt | llm
+    response = invoke_with_retry(
+        chain,
+        {"messages": state["messages"]},
+        state,
+        "Planner Agent",
+    )
+    state["messages"].append(response)
+    state["agent_response"] = response.content
+    state["agent_last"] = "planner_agent"
+    print_colored(f"Planner Agent Response:\n {response.content}", "yellow")
+    return state
+
+
 def query_agent(state: AgentState) -> AgentState:
     """Generate and execute Supabase SQL when enough data is available."""
     print_colored("Query Agent Invoked", "green")
@@ -87,6 +113,16 @@ def query_agent(state: AgentState) -> AgentState:
         system_prompt=SYSTEM_PROMPT_QUERY_AGENT,
     )
     conversation: List[BaseMessage] = list(state["messages"])
+    schema_info = state.get("schema_info", "")
+    if schema_info:
+        conversation.append(
+            HumanMessage(
+                content=(
+                    "Lưu ý: đây là schema Supabase hiện tại để tham chiếu khi lập kế hoạch và truy vấn:\n"
+                    f"{schema_info}"
+                )
+            )
+        )
     conversation.append(
         HumanMessage(
             content=(

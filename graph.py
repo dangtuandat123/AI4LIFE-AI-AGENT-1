@@ -1,6 +1,6 @@
 from langgraph.graph import END, StateGraph
 
-from agents import final_agent, node_get_schema, query_agent, router_agent
+from agents import final_agent, node_get_schema, planner_agent, query_agent, router_agent
 from state import AgentState
 
 
@@ -21,18 +21,21 @@ def build_graph() -> StateGraph[AgentState]:
 
     workflow.add_node("final_agent", final_agent)
     workflow.add_node("router_agent", router_agent)
+    workflow.add_node("planner_agent", planner_agent)
     workflow.add_node("query_agent", query_agent)
     workflow.add_node("node_get_schema", node_get_schema)
     
     workflow.set_entry_point("node_get_schema")
     
     workflow.add_edge("node_get_schema", "router_agent")
+    workflow.add_edge("planner_agent", "query_agent")
     workflow.add_edge("query_agent", "router_agent")
 
     workflow.add_conditional_edges(
         "router_agent",
         route_by_router_response,
         {
+            "planner_agent": "planner_agent",
             "query_agent": "query_agent",
             "final_agent": "final_agent",
         },
