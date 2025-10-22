@@ -18,7 +18,7 @@ class RouterResponse(BaseModel):
     
 class CheckbudgetResponse(BaseModel):
     message: Optional[str] = Field(description="Thông điệp từ agent kiểm tra ngân sách.")
-    budget_available: bool = Field(description="Ngân sách có đủ để thực hiện yêu cầu hay không.")   
+    status: bool = Field(description="Ngân sách có hợp lệ hay không.")   
 
 class AgentState(TypedDict, total=False):
     messages: List[BaseMessage]
