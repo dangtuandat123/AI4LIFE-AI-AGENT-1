@@ -16,15 +16,13 @@ class RouterResponse(BaseModel):
     reason: Optional[str] = Field(description="Lý do chuyển đổi agent, nếu có.")
     null_fields: Optional[List[str]] = Field(description="Danh sách các trường dữ liệu còn thiếu so với schema.")
     
-class CheckbudgetResponse(BaseModel):
-    message: Optional[str] = Field(description="Thông điệp từ agent kiểm tra ngân sách.")
-    budget_available: bool = Field(description="Ngân sách có đủ để thực hiện yêu cầu hay không.")   
+
 
 class AgentState(TypedDict, total=False):
     messages: List[BaseMessage]
     route_response: RouterResponse
     agent_response: Optional[str]
-    checkbudget_response: Optional[CheckbudgetResponse]
+    checkbudget_response: Optional[CheckBudgetResponse]
     final_response: Optional[FinalResponse]
     agent_last: Optional[str]
     schema_info: Optional[Any]

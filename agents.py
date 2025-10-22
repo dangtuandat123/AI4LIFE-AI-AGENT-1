@@ -9,7 +9,7 @@ from prompts import (
     SYSTEM_PROMPT_FINAL_AGENT,
     SYSTEM_PROMPT_ROUTER_AGENT,
 )
-from state import AgentState, FinalResponse, RouterResponse, CheckbudgetResponse
+from state import AgentState, FinalResponse, RouterResponse, CheckBudgetResponse
 from supabase_tool import describe_workspace, rebuild_tailieu_index
 from tools import rag_tailieu, run_python_code, run_supabase_sql, search_web
 from utils import create_agent_basic, create_agent_react, invoke_with_retry, print_colored
@@ -100,41 +100,27 @@ def checkbudget_agent(state: AgentState) -> AgentState:
         state["messages"].append(AIMessage(content=error_msg))
 
     llm = create_agent_react(
-        tools=[rag_tailieu, run_python_code],
-        response_struct=CheckbudgetResponse,
+        tools=[rag_tailieu,search_web],
+        response_struct=CheckBudgetResponse,
+        system_prompt=SYSTEM_PROMPT_CHECKBUDGET_AGENT,
     )
-
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            ("system", SYSTEM_PROMPT_CHECKBUDGET_AGENT),
-            MessagesPlaceholder(variable_name="messages"),
-            (
-                "human",
-                "Schema Supabase hiện có:\n{schema_info}\n\n"
-                "Báo cáo raw_input của nhân viên:\n{raw_input}",
-            ),
-        ]
-    )
-    chain = prompt | llm
-
     response = invoke_with_retry(
-        chain,
+        llm,
         {
-            "messages": state["messages"],
-            "schema_info": state.get("schema_info", "Không có dữ liệu schema."),
-            "raw_input": state.get("raw_input", ""),
+           "messages": state["messages"]
         },
         state,
-        "CheckBudget Agent",
+        "Checkbuget  Agent",
+        reminder="Vui lòng trả JSON đúng schema RouterResponse.",
     )
     print_colored(response, "cyan")
 
    
 
-    state["messages"] = response
-    state["agent_response"] = response.content
+    state["messages"] = response['messages']
+    state["agent_response"] = response
     state["agent_last"] = "checkbudget_agent"
-    print_colored(f"CheckBudget Agent Response:\n {response.content}", "yellow")
+    print_colored(f"CheckBudget Agent Response:\n {response['messages']}", "yellow")
     return state
 
 

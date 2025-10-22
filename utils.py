@@ -7,7 +7,8 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 from ollama._types import ResponseError
 from pydantic import BaseModel
-
+from langchain.agents.structured_output import ToolStrategy 
+from langchain.agents import create_agent
 from config import EMBEDDING_MODEL_NAME, LLM_MODEL_NAME, LLM_TEMPERATURE
 
 if TYPE_CHECKING:
@@ -19,23 +20,17 @@ def create_agent_basic(response_struct: Optional[type[BaseModel]] = None):
     return llm.with_structured_output(response_struct)
 
 
-def create_agent_react(
-    tools: Sequence["BaseTool"],
-    *,
-    verbose: bool = True,
-    response_struct: Optional[type[BaseModel]] = None,
-):
-    from langchain.agents import create_agent
-
+def create_agent_react(tools, response_struct,system_prompt):
     llm = ChatOllama(model=LLM_MODEL_NAME, temperature=LLM_TEMPERATURE)
-
-
-    return create_agent(
+    agent =create_agent(
         llm,
-        list(tools),
-        debug=verbose,
+        tools=tools,
+        system_prompt=system_prompt,
         response_format=response_struct,
+        debug=True
+        
     )
+    return agent
 
 
 def get_embedding_model():
