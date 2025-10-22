@@ -9,11 +9,7 @@ from prompts import (
     SYSTEM_PROMPT_FINAL_AGENT,
     SYSTEM_PROMPT_ROUTER_AGENT,
 )
-<<<<<<< HEAD
 from state import AgentState, FinalResponse, RouterResponse, CheckbudgetResponse
-=======
-from state import AgentState, FinalResponse, RouterResponse, CheckBudgetResponse
->>>>>>> e3df3295df4107a336bd1ab4ca664583f3d274d5
 from supabase_tool import describe_workspace, rebuild_tailieu_index
 from tools import rag_tailieu, run_python_code, run_supabase_sql, search_web
 from utils import create_agent_basic, create_agent_react, invoke_with_retry, print_colored
@@ -103,16 +99,9 @@ def checkbudget_agent(state: AgentState) -> AgentState:
         print_colored(error_msg, "red")
         state["messages"].append(AIMessage(content=error_msg))
 
-<<<<<<< HEAD
     llm = create_agent_react(
         tools=[rag_tailieu, run_python_code],
         response_struct=CheckbudgetResponse,
-=======
-    agent = create_agent_react(
-        tools=[rag_tailieu, run_python_code, search_web],
-        system_prompt=SYSTEM_PROMPT_CHECKBUDGET_AGENT,
-        response_model=CheckBudgetResponse,
->>>>>>> e3df3295df4107a336bd1ab4ca664583f3d274d5
     )
 
     prompt = ChatPromptTemplate.from_messages(
@@ -142,34 +131,10 @@ def checkbudget_agent(state: AgentState) -> AgentState:
 
    
 
-<<<<<<< HEAD
     state["messages"] = response
     state["agent_response"] = response.content
     state["agent_last"] = "checkbudget_agent"
     print_colored(f"CheckBudget Agent Response:\n {response.content}", "yellow")
-=======
-    last_ai_message = next(
-        (msg for msg in reversed(conversation) if isinstance(msg, AIMessage)),
-        None,
-    )
-    if last_ai_message is None:
-        raise RuntimeError("CheckBudget Agent did not produce an AIMessage.")
-
-    state["messages"] = conversation
-    response_text = last_ai_message.content
-    formatted_output = response_text
-    try:
-        parsed_response = json.loads(response_text)
-        formatted_output = json.dumps(parsed_response, ensure_ascii=False, indent=2)
-    except json.JSONDecodeError:
-        parsed_response = None
-
-    state["agent_response"] = response_text
-    print_colored(f"CheckBudget Agent Response:\n{response_text}", "yellow")
-
-    state["agent_last"] = "checkbudget_agent"
-    print_colored(f"CheckBudget Agent Response:\n{formatted_output}", "yellow")
->>>>>>> e3df3295df4107a336bd1ab4ca664583f3d274d5
     return state
 
 

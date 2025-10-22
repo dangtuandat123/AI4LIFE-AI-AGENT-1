@@ -22,11 +22,9 @@ def create_agent_basic(response_struct: Optional[type[BaseModel]] = None):
 def create_agent_react(
     tools: Sequence["BaseTool"],
     *,
-<<<<<<< HEAD
     verbose: bool = True,
     response_struct: Optional[type[BaseModel]] = None,
-) -> "CompiledStateGraph":
-    """Build a ReAct-style agent graph using the modern LangChain API."""
+):
     from langchain.agents import create_agent
 
     llm = ChatOllama(model=LLM_MODEL_NAME, temperature=LLM_TEMPERATURE)
@@ -38,36 +36,6 @@ def create_agent_react(
         debug=verbose,
         response_format=response_struct,
     )
-=======
-    system_prompt: Optional[str] = None,
-    response_model: Optional[type[BaseModel]] = None,
-    verbose: bool = True,
-):
-    """Build a ReAct-style agent graph using the LangChain create_agent helper."""
-    from langchain.agents import create_agent
-
-    llm = ChatOllama(model=LLM_MODEL_NAME, temperature=LLM_TEMPERATURE)
-    prompt_text = (
-        system_prompt
-        or "Bạn là trợ lý sử dụng công cụ. Hãy suy luận từng bước và chỉ dùng công cụ khi cần."
-    )
-
-    create_kwargs = {
-        "model": llm,
-        "tools": list(tools),
-        "system_prompt": prompt_text,
-        "debug": verbose,
-    }
-    if response_model is not None:
-        create_kwargs["response_format"] = response_model
-
-    try:
-        return create_agent(**create_kwargs)
-    except TypeError:
-        # Fallback for older LangChain versions without response_format support
-        create_kwargs.pop("response_format", None)
-        return create_agent(**create_kwargs)
->>>>>>> e3df3295df4107a336bd1ab4ca664583f3d274d5
 
 
 def get_embedding_model():
