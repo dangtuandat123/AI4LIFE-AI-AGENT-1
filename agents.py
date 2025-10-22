@@ -143,13 +143,10 @@ def checkbudget_agent(state: AgentState) -> AgentState:
 
     state["checkbudget_response"] = structured
     state["agent_last"] = "checkbudget_agent"
-
-    if structured.message:
-        last_content = state["messages"][-1].content if state["messages"] else ""
-        if last_content.strip() != structured.message.strip():
-            state["messages"].append(AIMessage(content=structured.message))
-
-    print_colored(f"CheckBudget Agent Response:\n {structured}", "yellow")
+    print_colored(
+        f"CheckBudget Agent Response:\n {structured}",
+        "yellow",
+    )
     return state
 
 
