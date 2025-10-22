@@ -100,7 +100,7 @@ def checkbudget_agent(state: AgentState) -> AgentState:
         state["messages"].append(AIMessage(content=error_msg))
 
     llm = create_agent_react(
-        tools=[rag_tailieu, run_supabase_sql, run_python_code, search_web],
+        tools=[rag_tailieu, run_python_code, search_web],
         response_struct=CheckBudgetResponse,
         system_prompt=SYSTEM_PROMPT_CHECKBUDGET_AGENT,
     )
