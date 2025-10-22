@@ -17,7 +17,6 @@ class RouterResponse(BaseModel):
     null_fields: Optional[List[str]] = Field(description="Danh sách các trường dữ liệu còn thiếu so với schema.")
     
 
-
 class AgentState(TypedDict, total=False):
     messages: List[BaseMessage]
     route_response: RouterResponse
