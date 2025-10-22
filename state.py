@@ -9,7 +9,7 @@ class FinalResponse(BaseModel):
 class CheckBudgetResponse(BaseModel):
     message: str = Field(description="Tóm tắt rõ ràng kết quả kiểm tra ngân sách hoặc hướng dẫn cần thực hiện.")
     status: bool = Field(description="Ngân sách hợp lệ hay cần xử lý thêm.")
-   
+   #
 class RouterResponse(BaseModel):
     agent_current: Literal["node_get_schema", "router_agent", "checkbudget_agent", "final_agent"] = Field(description="agent hiện tại đang thực thi.")
     next_agent: Literal["checkbudget_agent", "final_agent"] = Field(description="agent tiếp theo sẽ thực hiện.")
