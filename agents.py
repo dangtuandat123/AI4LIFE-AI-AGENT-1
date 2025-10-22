@@ -58,9 +58,12 @@ def router_agent(state: AgentState) -> AgentState:
             MessagesPlaceholder(variable_name="messages"),
             (
                 "human",
-                "Agent vừa hoàn thành: {agent_last}.\n"
-                "Báo cáo raw_input của nhân viên:\n{raw_input}",
-                "Sau khi trích xuất: {data}"
+                """Agent vừa hoàn thành: {agent_last}.
+
+Báo cáo raw_input của nhân viên:
+{raw_input}
+
+Sau khi trích xuất: {data}""",
             ),
         ]
     )
@@ -71,16 +74,16 @@ def router_agent(state: AgentState) -> AgentState:
             "messages": state["messages"],
             "agent_last": state.get("agent_last", "unknown"),
             "raw_input": state.get("input_text", ""),
-            "data":  state.get("checkdata_response", "")
+            "data": state.get("checkdata_response", "")
         },
         state,
         "Router Agent",
-        reminder="Vui lòng trả JSON đúng schema RouterResponse.",
+        reminder="Vui lòng trả JSON đúng schema RouterResponse. agent_current phải là một trong: 'router_agent', 'checkbudget_agent', 'final_agent', 'checkdata_agent'",
     )
 
     state["route_response"] = response
     decision_summary = (
-        f"Router quyết định chuyển từ {response.agent_current} sang {response.next_agent}."
+        f"Router quyết định chuyển từ {state['agent_last']} sang {response.next_agent}."
     )
     if response.reason:
         decision_summary += f" Lý do: {response.reason}"

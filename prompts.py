@@ -6,7 +6,6 @@ next_agent=final_agent nếu thông tin các trường chưa đầy đủ phải
 
 Trả về **JSON RouterResponse duy nhất** (không kèm text):
    {{
-     "agent_current": "...",
      "next_agent": "...",
      "reason": "...",
    }}
