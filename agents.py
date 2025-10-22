@@ -8,29 +8,42 @@ from prompts import (
     SYSTEM_PROMPT_CHECKBUDGET_AGENT,
     SYSTEM_PROMPT_FINAL_AGENT,
     SYSTEM_PROMPT_ROUTER_AGENT,
+    SYSTEM_PROMPT_CHECKDATA_AGENT
 )
-from state import AgentState, FinalResponse, RouterResponse, CheckBudgetResponse
+from state import AgentState, FinalResponse, RouterResponse, CheckBudgetResponse, CheckDataResponse
 from supabase_tool import describe_workspace, rebuild_tailieu_index
 from tools import rag_tailieu, run_python_code, run_supabase_sql, search_web
 from utils import create_agent_basic, create_agent_react, invoke_with_retry, print_colored
 
 
-def node_get_schema(state: AgentState) -> AgentState:
-    """Fetch Supabase schema metadata before routing."""
-    try:
-        schema_info = describe_workspace()
-        print_colored("Đã lấy schema Supabase thành công.", "cyan")
-    except Exception as exc:  # pragma: no cover - defensive logging
-        schema_info = f"Không thể lấy schema Supabase do lỗi: {exc}"
-        print_colored(schema_info, "red")
-        state["messages"].append(
-            AIMessage(
-                content="Không thể lấy schema Supabase ở thời điểm hiện tại. "
-                "Vui lòng thử lại sau hoặc kiểm tra cấu hình kết nối."
-            )
-        )
-    state["schema_info"] = schema_info
-    state["agent_last"] = "node_get_schema"
+def checkdata_agent(state: AgentState) -> AgentState:
+    print_colored("Checkdata Agent Invoked", "green")
+
+    llm = create_agent_basic(response_struct=CheckDataResponse)
+    prompt = ChatPromptTemplate.from_messages(
+    [
+        ("system", SYSTEM_PROMPT_CHECKDATA_AGENT),
+        MessagesPlaceholder(variable_name="messages"),  
+        (
+            "human",
+            """Dựa trên raw_input (dữ liệu thô) được cung cấp ở trên, hãy phân tích và trích xuất thông tin chính xác vào định dạng CheckDataResponse.
+                Raw_input: {input_text}
+                Hãy trả lời chỉ bằng JSON hợp lệ của CheckDataResponse, không thêm bất kỳ giải thích nào khác.""",
+            ),
+    ])
+    chain = prompt | llm
+    response = invoke_with_retry(
+        chain,
+        {"messages": state["messages"], "input_text": state["input_text"]},
+        state,
+        "Checkdata Agent",
+        reminder="Please resend the final response using the expected JSON schema.",
+    )
+
+    state["agent_last"] = "checkdata_agent"
+    state["checkdata_response"] = response
+
+    print_colored(f"Checkdata Agent Response:\n {response}", "yellow")
     return state
 
 
@@ -46,8 +59,8 @@ def router_agent(state: AgentState) -> AgentState:
             (
                 "human",
                 "Agent vừa hoàn thành: {agent_last}.\n"
-                "Schema Supabase hiện có:\n{schema_info}\n\n"
                 "Báo cáo raw_input của nhân viên:\n{raw_input}",
+                "Sau khi trích xuất: {data}"
             ),
         ]
     )
@@ -57,8 +70,8 @@ def router_agent(state: AgentState) -> AgentState:
         {
             "messages": state["messages"],
             "agent_last": state.get("agent_last", "unknown"),
-            "schema_info": state.get("schema_info", "Không có dữ liệu schema."),
-            "raw_input": state.get("raw_input", ""),
+            "raw_input": state.get("input_text", ""),
+            "data":  state.get("checkdata_response", "")
         },
         state,
         "Router Agent",
@@ -71,8 +84,6 @@ def router_agent(state: AgentState) -> AgentState:
     )
     if response.reason:
         decision_summary += f" Lý do: {response.reason}"
-    if response.null_fields:
-        decision_summary += f" (Thiếu thông tin: {', '.join(response.null_fields)})"
     state["messages"].append(AIMessage(content=decision_summary))
     state["agent_last"] = "router_agent"
     print_colored(f"Router Agent Response:\n {response}", "yellow")

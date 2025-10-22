@@ -7,7 +7,7 @@ from state import AgentState
 def run_app(user_input: str) -> AgentState:
     initial_state: AgentState = {
         "messages": [HumanMessage(content=user_input)],
-        "raw_input": user_input,
+        "input_text": user_input,
     }
     final_state = compiled_app.invoke(initial_state)
     return final_state
