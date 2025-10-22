@@ -10,13 +10,13 @@ Checklist hoạt động (bảng activities):
 - amount_value, revenue_value (numeric ≥ 0)
 - status đề xuất ∈ {{approved, pending}}
 
-Thiếu trường nào → đưa vào null_fields. Nếu thời gian mơ hồ mà không suy ra ISO → xem như thiếu activity_date.
+Thiếu trường nào → đưa vào null_fields. Nếu thời gian mơ hồ không thể suy ra ISO → xem như thiếu activity_date.
 
 Điều hướng:
 - agent_last ∈ {{node_get_schema, router_agent}}:
     + Nếu raw_input nhắc “tailieu”, “chính sách”, “quy định” hoặc cần tra cứu quy trình → checkbudget_agent.
     + Nếu checklist đủ → checkbudget_agent. Thiếu → final_agent.
-- agent_last = checkbudget_agent → nếu còn thiếu dữ liệu hoặc lỗi công cụ → final_agent (yêu cầu bổ sung); nếu đã đủ thông tin → final_agent (tổng hợp kết quả).
+- agent_last = checkbudget_agent → nếu còn thiếu dữ liệu hoặc công cụ báo lỗi → final_agent (yêu cầu bổ sung); nếu đã đủ thông tin → final_agent (tổng hợp kết quả).
 
 Trả về **JSON RouterResponse duy nhất** (không kèm text):
    {{
@@ -32,23 +32,26 @@ Trả lời tiếng Việt gọn gàng.
 
 
 SYSTEM_PROMPT_CHECKBUDGET_AGENT = """
-Bạn là checkbudget agent. Yêu cầu: kết hợp dữ liệu Supabase và kiến thức nội bộ trong tailieu.txt (đã embed lên Supabase vector store) để kiểm tra ngân sách.
+Bạn là checkbudget agent. Nhiệm vụ: kết hợp dữ liệu Supabase và kiến thức nội bộ trong tailieu.txt (đã embed lên Supabase vector store) để kiểm tra ngân sách.
 
 Tools:
 - rag_tailieu: tra cứu thông tin/quy định/mẫu từ tailieu.txt (ghi rõ chunk_index + doc_hash khi viện dẫn).
-- run_supabase_sql: SELECT-only, kiểm tra ngân sách/budgets/activities thực tế.
 - run_python_code: tính toán phụ.
 - search_web: chỉ dùng khi tailieu.txt thiếu thông tin cần thiết.
 
 Quy tắc:
 1. Nếu chưa có ngữ cảnh nội bộ, hãy gọi rag_tailieu và lấy 1–2 đoạn liên quan trước khi chạy SQL.
-2. Tổng hợp kết quả rag_tailieu + Supabase rõ ràng, nêu trạng thái chi (approved/pending), warn_percent và các mốc so sánh.
+2. Tổng hợp kết quả rag_tailieu rõ ràng, nêu trạng thái chi.
 3. Trả lời tiếng Việt tự nhiên, liệt kê hành động giải thích nào dẫn tới kết luận ngân sách đạt hay vượt.
-4. Tuyệt đối không INSERT/UPDATE/DELETE.
+4. Khi hoàn thành, PHẢI trả về **chính xác một JSON**:
+   {{
+     "message": "<tóm tắt kiểm tra ngân sách hoặc hướng dẫn, không được để trống>",
+     "status": true/false
+   }} và message phải nêu rõ kết luận/khuyến nghị.
 """
 
 SYSTEM_PROMPT_FINAL_AGENT = """
-Bạn là final agent. Tổng hợp thông tin từ router, planner, query và phản hồi cho nhân viên bằng tiếng Việt lịch sự.
+Bạn là final agent. Tổng hợp thông tin từ router và checkbudget để phản hồi cho nhân viên bằng tiếng Việt lịch sự.
 
 Trả về **chính xác một JSON**:
 {{

@@ -244,7 +244,7 @@ def _split_tailieu_text(text: str, doc_hash: str) -> List[Document]:
         return []
 
     if RecursiveCharacterTextSplitter:
-        splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=120)
+        splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=80)
         chunks = splitter.split_text(text)
     # else:  # pragma: no cover - fallback khi chưa có langchain_text_splitters
     #     chunk_size = 800

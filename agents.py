@@ -1,3 +1,4 @@
+import json
 from typing import List
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
@@ -8,7 +9,11 @@ from prompts import (
     SYSTEM_PROMPT_FINAL_AGENT,
     SYSTEM_PROMPT_ROUTER_AGENT,
 )
-from state import AgentState, FinalResponse, RouterResponse
+<<<<<<< HEAD
+from state import AgentState, FinalResponse, RouterResponse, CheckbudgetResponse
+=======
+from state import AgentState, FinalResponse, RouterResponse, CheckBudgetResponse
+>>>>>>> e3df3295df4107a336bd1ab4ca664583f3d274d5
 from supabase_tool import describe_workspace, rebuild_tailieu_index
 from tools import rag_tailieu, run_python_code, run_supabase_sql, search_web
 from utils import create_agent_basic, create_agent_react, invoke_with_retry, print_colored
@@ -37,7 +42,7 @@ def router_agent(state: AgentState) -> AgentState:
     """Decide whether to collect more info or run queries."""
     print_colored("Router Agent Invoked", "green")
 
-    llm = create_agent_basic(model=RouterResponse)
+    llm = create_agent_basic(response_struct=RouterResponse)
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", SYSTEM_PROMPT_ROUTER_AGENT),
@@ -98,33 +103,51 @@ def checkbudget_agent(state: AgentState) -> AgentState:
         print_colored(error_msg, "red")
         state["messages"].append(AIMessage(content=error_msg))
 
-    agent = create_agent_react(
+<<<<<<< HEAD
+    llm = create_agent_react(
         tools=[rag_tailieu, run_python_code],
+        response_struct=CheckbudgetResponse,
+=======
+    agent = create_agent_react(
+        tools=[rag_tailieu, run_python_code, search_web],
         system_prompt=SYSTEM_PROMPT_CHECKBUDGET_AGENT,
+        response_model=CheckBudgetResponse,
+>>>>>>> e3df3295df4107a336bd1ab4ca664583f3d274d5
     )
 
-    conversation: List[BaseMessage] = list(state["messages"])
-    schema_info = state.get("schema_info")
-    if schema_info:
-        conversation.append(
-            HumanMessage(
-                content=(
-                    "Tham khảo schema Supabase mới nhất để tránh sai cột/kiểu dữ liệu:\n"
-                    f"{schema_info}"
-                )
-            )
-        )
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", SYSTEM_PROMPT_CHECKBUDGET_AGENT),
+            MessagesPlaceholder(variable_name="messages"),
+            (
+                "human",
+                "Schema Supabase hiện có:\n{schema_info}\n\n"
+                "Báo cáo raw_input của nhân viên:\n{raw_input}",
+            ),
+        ]
+    )
+    chain = prompt | llm
 
-    result_state = invoke_with_retry(
-        agent,
-        {"messages": conversation},
+    response = invoke_with_retry(
+        chain,
+        {
+            "messages": state["messages"],
+            "schema_info": state.get("schema_info", "Không có dữ liệu schema."),
+            "raw_input": state.get("raw_input", ""),
+        },
         state,
         "CheckBudget Agent",
     )
+    print_colored(response, "cyan")
 
-    if isinstance(result_state, dict) and "messages" in result_state:
-        conversation = result_state["messages"]
+   
 
+<<<<<<< HEAD
+    state["messages"] = response
+    state["agent_response"] = response.content
+    state["agent_last"] = "checkbudget_agent"
+    print_colored(f"CheckBudget Agent Response:\n {response.content}", "yellow")
+=======
     last_ai_message = next(
         (msg for msg in reversed(conversation) if isinstance(msg, AIMessage)),
         None,
@@ -133,9 +156,20 @@ def checkbudget_agent(state: AgentState) -> AgentState:
         raise RuntimeError("CheckBudget Agent did not produce an AIMessage.")
 
     state["messages"] = conversation
-    state["agent_response"] = last_ai_message.content
+    response_text = last_ai_message.content
+    formatted_output = response_text
+    try:
+        parsed_response = json.loads(response_text)
+        formatted_output = json.dumps(parsed_response, ensure_ascii=False, indent=2)
+    except json.JSONDecodeError:
+        parsed_response = None
+
+    state["agent_response"] = response_text
+    print_colored(f"CheckBudget Agent Response:\n{response_text}", "yellow")
+
     state["agent_last"] = "checkbudget_agent"
-    print_colored(f"CheckBudget Agent Response:\n {last_ai_message.content}", "yellow")
+    print_colored(f"CheckBudget Agent Response:\n{formatted_output}", "yellow")
+>>>>>>> e3df3295df4107a336bd1ab4ca664583f3d274d5
     return state
 
 
@@ -143,7 +177,7 @@ def final_agent(state: AgentState) -> AgentState:
     """Produce the user-facing response following the router decision."""
     print_colored("Final Agent Invoked", "green")
 
-    llm = create_agent_basic(model=FinalResponse)
+    llm = create_agent_basic(response_struct=FinalResponse)
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", SYSTEM_PROMPT_FINAL_AGENT),
