@@ -20,15 +20,15 @@ def create_agent_basic(response_struct: Optional[type[BaseModel]] = None):
     return llm.with_structured_output(response_struct)
 
 
-def create_agent_react(tools, response_struct,system_prompt):
+def create_agent_react(tools, response_struct, system_prompt):
     llm = ChatOllama(model=LLM_MODEL_NAME, temperature=LLM_TEMPERATURE)
-    agent =create_agent(
+    response_format = ToolStrategy(response_struct) if response_struct else None
+    agent = create_agent(
         llm,
         tools=tools,
         system_prompt=system_prompt,
-        response_format=response_struct,
+        response_format=response_format,
         debug=True
-        
     )
     return agent
 

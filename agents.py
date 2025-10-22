@@ -116,12 +116,40 @@ def checkbudget_agent(state: AgentState) -> AgentState:
     state["messages"] = response.get("messages", state["messages"])
     state["agent_response"] = response
     structured = response.get("structured_response")
+
+    if structured is None:
+        formatter_llm = create_agent_basic(response_struct=CheckBudgetResponse)
+        formatter_prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    "Bạn là bộ định dạng. Dựa vào toàn bộ cuộc hội thoại trên, "
+                    "hãy tóm tắt kết quả kiểm tra ngân sách và trả về JSON theo schema CheckBudgetResponse.",
+                ),
+                MessagesPlaceholder(variable_name="messages"),
+            ]
+        )
+        formatter_chain = formatter_prompt | formatter_llm
+        structured = invoke_with_retry(
+            formatter_chain,
+            {"messages": state["messages"]},
+            state,
+            "CheckBudget Formatter",
+            reminder="Vui lòng trả JSON đúng schema CheckBudgetResponse.",
+        )
+
+    if isinstance(state["agent_response"], dict):
+        state["agent_response"]["structured_response"] = structured
+
     state["checkbudget_response"] = structured
     state["agent_last"] = "checkbudget_agent"
-    print_colored(
-        f"CheckBudget Agent Response:\n {structured}",
-        "yellow",
-    )
+
+    if structured.message:
+        last_content = state["messages"][-1].content if state["messages"] else ""
+        if last_content.strip() != structured.message.strip():
+            state["messages"].append(AIMessage(content=structured.message))
+
+    print_colored(f"CheckBudget Agent Response:\n {structured}", "yellow")
     return state
 
 
