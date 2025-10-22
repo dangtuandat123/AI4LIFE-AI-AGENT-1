@@ -139,7 +139,7 @@ def run_python_code(code: str) -> str:
         error_msg = f"[ERROR] Python execution failed: {exc}"
         print_colored(error_msg, "red")
         return error_msg
-    print_colored(output, "cyan")
+    print_colored(output, "magenta")
     print("[Tool] run_python_code completed")
     return output
 

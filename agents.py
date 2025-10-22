@@ -60,10 +60,10 @@ def router_agent(state: AgentState) -> AgentState:
                 "human",
                 """Agent vừa hoàn thành: {agent_last}.
 
-Báo cáo raw_input của nhân viên:
-{raw_input}
+                    Báo cáo raw_input của nhân viên:
+                    {raw_input}
 
-Sau khi trích xuất: {data}""",
+                    Sau khi trích xuất: {data}""",
             ),
         ]
     )
