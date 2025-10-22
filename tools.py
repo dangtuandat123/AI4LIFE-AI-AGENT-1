@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from postgrest.exceptions import APIError
 
-from supabase_tool import run_sql_query
+from supabase_tool import rag_search_tailieu, rebuild_tailieu_index, run_sql_query
 from utils import print_colored
 try:
     from langchain_tavily import TavilySearch as _TavilySearchTool
@@ -68,6 +68,13 @@ class ExecutePythonArgs(BaseModel):
     )
 
 
+class RagTailieuArgs(BaseModel):
+    query: str = Field(..., description="Câu hỏi hoặc từ khóa cần tìm trong tailieu.txt.")
+    top_k: int = Field(default=4, ge=1, le=10, description="Số đoạn văn trả về (tối đa 10).")
+    refresh_index: bool = Field(
+        default=False,
+        description="Đặt True nếu muốn xây lại index từ tailieu.txt trước khi tìm kiếm.",
+    )
 
 #khai bao tool 
 
@@ -164,3 +171,23 @@ def run_python_code(code: str) -> str:
     print_colored(result_repr, "cyan")
     print("[Tool] run_python_code completed")
     return result_repr
+
+
+@tool(
+    "rag_tailieu",
+    description="Truy vấn tri thức nội bộ từ tailieu.txt thông qua Supabase vector store.",
+    args_schema=RagTailieuArgs,
+    return_direct=True,
+)
+def rag_tailieu(query: str, top_k: int = 4, refresh_index: bool = False) -> str:
+    """
+    Tìm kiếm các đoạn văn bản liên quan trong tailieu.txt đã được index lên Supabase.
+    """
+    print(f"[Tool] rag_tailieu called with query: {query} | top_k={top_k} | refresh={refresh_index}")
+    if refresh_index:
+        rebuild_tailieu_index(force=True)
+    results = rag_search_tailieu(query, k=top_k, refresh=False)
+    payload = json.dumps(results, ensure_ascii=False, indent=2)
+    print_colored(payload, "magenta")
+    print("[Tool] rag_tailieu completed")
+    return payload

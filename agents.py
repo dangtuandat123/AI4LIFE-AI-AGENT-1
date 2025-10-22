@@ -4,14 +4,15 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from prompts import (
+    SYSTEM_PROMPT_CHECKBUDGET_AGENT,
     SYSTEM_PROMPT_FINAL_AGENT,
     SYSTEM_PROMPT_PLANNER_AGENT,
     SYSTEM_PROMPT_QUERY_AGENT,
     SYSTEM_PROMPT_ROUTER_AGENT,
 )
 from state import AgentState, FinalResponse, RouterResponse
-from supabase_tool import describe_workspace
-from tools import run_python_code, run_supabase_sql, search_web
+from supabase_tool import describe_workspace, rebuild_tailieu_index
+from tools import rag_tailieu, run_python_code, run_supabase_sql, search_web
 from utils import create_agent_basic, create_agent_react, invoke_with_retry, print_colored
 
 
@@ -175,6 +176,66 @@ def query_agent(state: AgentState) -> AgentState:
     state["agent_response"] = last_ai_message.content if last_ai_message else None
     state["agent_last"] = "query_agent"
     print_colored(f"Query Agent Response:\n {state['agent_response']}", "yellow")
+    return state
+
+
+def checkbudget_agent(state: AgentState) -> AgentState:
+    """Hybrid ReAct agent có RAG tailieu.txt và kiểm tra ngân sách."""
+    print_colored("CheckBudget Agent Invoked", "green")
+
+    try:
+        indexed = rebuild_tailieu_index()
+        if indexed:
+            print_colored(
+                f"Đồng bộ tailieu.txt lên Supabase ({indexed} đoạn mới).",
+                "cyan",
+            )
+    except Exception as exc:  # pragma: no cover - defensive logging
+        error_msg = (
+            "Không thể đồng bộ tailieu.txt lên vector store. "
+            f"Vui lòng kiểm tra Supabase: {exc}"
+        )
+        print_colored(error_msg, "red")
+        state["messages"].append(AIMessage(content=error_msg))
+
+    agent = create_agent_react(
+        tools=[rag_tailieu, run_supabase_sql, run_python_code, search_web],
+        system_prompt=SYSTEM_PROMPT_CHECKBUDGET_AGENT,
+    )
+
+    conversation: List[BaseMessage] = list(state["messages"])
+    schema_info = state.get("schema_info")
+    if schema_info:
+        conversation.append(
+            HumanMessage(
+                content=(
+                    "Tham khảo schema Supabase mới nhất để tránh sai cột/kiểu dữ liệu:\n"
+                    f"{schema_info}"
+                )
+            )
+        )
+
+    result_state = invoke_with_retry(
+        agent,
+        {"messages": conversation},
+        state,
+        "CheckBudget Agent",
+    )
+
+    if isinstance(result_state, dict) and "messages" in result_state:
+        conversation = result_state["messages"]
+
+    last_ai_message = next(
+        (msg for msg in reversed(conversation) if isinstance(msg, AIMessage)),
+        None,
+    )
+    if last_ai_message is None:
+        raise RuntimeError("CheckBudget Agent did not produce an AIMessage.")
+
+    state["messages"] = conversation
+    state["agent_response"] = last_ai_message.content
+    state["agent_last"] = "checkbudget_agent"
+    print_colored(f"CheckBudget Agent Response:\n {last_ai_message.content}", "yellow")
     return state
 
 

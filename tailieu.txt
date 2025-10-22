@@ -1,0 +1,99 @@
+# Tài liệu cho Agent RAG: Mức trung bình budget của các loại hợp đồng sale
+
+## Mục đích
+Tài liệu này mô tả mức budget trung bình (ước tính phạm vi) cho các loại hợp đồng bán hàng (sale contract types) thường gặp, cùng với giả định, metadata/schema và mẫu prompt cho Agent sử dụng trong mô hình RAG (Retrieval-Augmented Generation). Mục tiêu: giúp agent trả lời nhanh câu hỏi về "mức budget" khi người dùng hỏi, hoặc lọc/dự đoán budget cho lead/opportunity.
+
+## Giả định chung
+- Đơn vị tiền tệ: VND (Việt Nam đồng). Nếu cần hỗ trợ nhiều loại tiền tệ, agent cần chuyển đổi theo tỷ giá động.
+- Khoảng ngân sách là ước tính trung bình cho mỗi loại hợp đồng, không phải số chính xác của từng giao dịch.
+- Phạm vi (low - high) cung cấp một khoảng tham khảo (ví dụ: 50 triệu - 200 triệu).
+- Mức "Mức độ" (Low/Medium/High) là phân phối tỉ lệ dựa trên giá trị: Low (<100M), Medium (100M-1B), High (>1B). Thay đổi theo đặc thù ngành hàng.
+
+## Danh sách loại hợp đồng bán hàng (ví dụ phổ biến)
+Tài liệu liệt kê các loại hợp đồng thường gặp và phạm vi budget tham khảo.
+
+1. Hợp đồng bán lẻ (Retail Sale)
+   - Mô tả: Giao dịch bán lẻ cho khách hàng cá nhân hoặc cửa hàng nhỏ.
+   - Mức budget tham khảo: 500.000 VND - 50.000.000 VND
+   - Mức: Low - Medium
+
+2. Hợp đồng B2B nhỏ (SMB Business Sale)
+   - Mô tả: Hợp đồng bán cho doanh nghiệp nhỏ và vừa.
+   - Mức budget tham khảo: 50.000.000 VND - 500.000.000 VND
+   - Mức: Medium
+
+3. Hợp đồng dự án tích hợp (System Integration / Implementation)
+   - Mô tả: Dự án tích hợp phần mềm, triển khai hệ thống.
+   - Mức budget tham khảo: 300.000.000 VND - 5.000.000.000 VND
+   - Mức: Medium - High
+
+4. Hợp đồng cung cấp thiết bị (Hardware Supply)
+   - Mô tả: Bán hàng thiết bị phần cứng cho doanh nghiệp.
+   - Mức budget tham khảo: 100.000.000 VND - 10.000.000.000 VND
+   - Mức: Medium - High
+
+5. Hợp đồng dịch vụ theo tháng (Subscription / SaaS)
+   - Mô tả: Dịch vụ thuê bao hàng tháng/năm.
+   - Mức budget tham khảo: 1.000.000 VND - 200.000.000 VND / năm (tùy gói)
+   - Mức: Low - Medium
+
+6. Hợp đồng marketing/agency
+   - Mô tả: Hợp đồng chiến dịch marketing, agency fees.
+   - Mức budget tham khảo: 10.000.000 VND - 2.000.000.000 VND
+   - Mức: Low - High
+
+7. Hợp đồng xây dựng/thi công (Construction/Works)
+   - Mô tả: Công trình xây dựng, thi công.
+   - Mức budget tham khảo: 500.000.000 VND - 100.000.000.000 VND
+   - Mức: High
+
+## Metadata / Schema (khi lưu trong vector DB hoặc DB hệ thống)
+- contract_type: string (ví dụ: "retail", "SMB", "integration", ...)
+- currency: string (ví dụ: "VND")
+- budget_low: integer (số nguyên, unit in smallest currency unit hoặc million)
+- budget_high: integer
+- budget_unit: string ("VND", "million VND")
+- budget_level: string ("Low"|"Medium"|"High")
+- source: string (nguồn dữ liệu/ước tính)
+- last_updated: date
+
+Ví dụ JSON:
+{
+  "contract_type": "integration",
+  "currency": "VND",
+  "budget_low": 300000000,
+  "budget_high": 5000000000,
+  "budget_unit": "VND",
+  "budget_level": "Medium-High",
+  "source": "internal_estimate",
+  "last_updated": "2025-10-22"
+}
+
+## Mẫu Prompt cho Agent RAG
+Sử dụng prompt sau khi truy vấn vector DB để trả lời người dùng.
+
+System: Bạn là một trợ lý chuyên về bán hàng; cung cấp phạm vi ngân sách ước tính cho các loại hợp đồng.
+
+User: Khách hàng hỏi: "Mức trung bình budget cho hợp đồng [CONTRACT_TYPE] là bao nhiêu?"
+
+Agent (RAG retrieval step): Truy xuất các document có tag `budget` và `contract_type:[CONTRACT_TYPE]`.
+
+Agent (generation step): Kết hợp thông tin retrieval và trả lời mẫu:
+"Mức ngân sách ước tính cho [CONTRACT_TYPE] là khoảng [LOW] đến [HIGH] [CURRENCY]. Đây là ước tính trung bình; phạm vi thực tế có thể thay đổi dựa trên yêu cầu chi tiết, số lượng, và dịch vụ bổ sung."
+
+## Luồng kiểm tra / Unit tests (gợi ý)
+- Test 1 (happy path): Input contract_type = "retail" -> trả về range không rỗng và currency = VND.
+- Test 2 (unknown type): Input contract_type = "unknown" -> trả về fallback message đề nghị cung cấp thêm chi tiết.
+- Test 3 (currency conversion): Khi yêu cầu EUR, kiểm tra agent có gọi module chuyển đổi tỷ giá và trả về số tương ứng.
+
+## Edge cases & Gợi ý mở rộng
+- Nếu user hỏi "mức trung bình" thì trả về trung bình arithmatic (low+high)/2 kèm range.
+- Nếu có dữ liệu lịch sử (actual deals), agent nên ưu tiên dùng distribution thống kê thực tế (median, quartiles).
+- Thêm cấu hình theo ngành (industry) vì cùng loại hợp đồng nhưng ngành khác nhau budget khác nhau.
+
+## Ghi chú
+- Các con số trong tài liệu là ước tính mẫu dành cho môi trường VN và mục đích minh họa; cần cập nhật bằng dữ liệu thực tế từ CRM, báo cáo bán hàng hoặc nguồn đáng tin cậy.
+- Nếu muốn, tôi có thể: (1) mở rộng doc sang tiếng Anh, (2) thêm script sample để load schema vào vector DB, hoặc (3) tạo prompt templates cụ thể cho từng loại hợp đồng.
+
+---
+Tạo bởi agent tài liệu tự động vào 2025-10-22.

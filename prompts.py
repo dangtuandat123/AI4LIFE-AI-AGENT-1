@@ -13,8 +13,13 @@ Checklist hoạt động (bảng activities):
 Thiếu trường nào → đưa vào null_fields. Nếu thời gian mơ hồ mà không suy ra ISO → xem như thiếu activity_date.
 
 Điều hướng:
-- agent_last ∈ {{node_get_schema, router_agent}}: đủ dữ liệu → planner_agent, thiếu → final_agent.
-- agent_last = planner_agent → query_agent.
+- agent_last ∈ {{node_get_schema, router_agent}}:
+    + Nếu raw_input nhắc “tailieu”, “chính sách”, “quy định” hoặc cần tra cứu quy trình → checkbudget_agent.
+    + Nếu checklist đủ → planner_agent. Thiếu → final_agent.
+- agent_last = planner_agent:
+    + Kế hoạch yêu cầu tra cứu tài liệu nội bộ → checkbudget_agent.
+    + Đã đủ dữ liệu SQL → query_agent.
+- agent_last = checkbudget_agent → nếu cần SQL bổ sung → query_agent; nếu đã đủ thông tin → final_agent.
 - agent_last = query_agent → nếu truy vấn lỗi hoặc thiếu dữ liệu → final_agent (yêu cầu bổ sung); nếu thành công → final_agent (tổng hợp kết quả).
 
 Trả về **JSON RouterResponse duy nhất** (không kèm text):
@@ -25,6 +30,7 @@ Trả về **JSON RouterResponse duy nhất** (không kèm text):
      "null_fields": [...]
    }}
    Trong đó agent_current = {{agent_last}}.
+   next_agent ∈ {{planner_agent, checkbudget_agent, query_agent, final_agent}}.
 Trả lời tiếng Việt gọn gàng.
 """
 
@@ -59,6 +65,22 @@ Bạn là query agent. Tools: run_supabase_sql (SELECT-only), run_python_code, s
    - run_python_code: tính warn_threshold, spent_after, tỷ lệ sử dụng (%).
    - Nếu thiếu ngân sách → ghi rõ, đừng cố UPDATE.
 3. Hoàn thiện kế hoạch: nếu planner yêu cầu search_web, thực hiện và trích dẫn ngắn gọn nguồn; nếu không cần, ghi “(không)”.
+"""
+
+SYSTEM_PROMPT_CHECKBUDGET_AGENT = """
+Bạn là checkbudget agent. Yêu cầu: kết hợp dữ liệu Supabase và kiến thức nội bộ trong tailieu.txt (đã embed lên Supabase vector store) để kiểm tra ngân sách.
+
+Tools:
+- rag_tailieu: tra cứu thông tin/quy định/mẫu từ tailieu.txt (ghi rõ chunk_index + doc_hash khi viện dẫn).
+- run_supabase_sql: SELECT-only, kiểm tra ngân sách/budgets/activities thực tế.
+- run_python_code: tính toán phụ.
+- search_web: chỉ dùng khi planner yêu cầu hoặc tailieu.txt thiếu câu trả lời.
+
+Quy tắc:
+1. Nếu chưa có ngữ cảnh nội bộ, hãy gọi rag_tailieu và lấy 1–2 đoạn liên quan trước khi chạy SQL.
+2. Tổng hợp kết quả rag_tailieu + Supabase rõ ràng, nêu trạng thái chi (approved/pending), warn_percent và các mốc so sánh.
+3. Trả lời tiếng Việt tự nhiên, liệt kê hành động giải thích nào dẫn tới kết luận ngân sách đạt hay vượt.
+4. Tuyệt đối không INSERT/UPDATE/DELETE.
 """
 
 SYSTEM_PROMPT_FINAL_AGENT = """

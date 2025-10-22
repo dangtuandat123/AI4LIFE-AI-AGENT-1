@@ -1,9 +1,23 @@
+import hashlib
+import json
 import os
+from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 from dotenv import load_dotenv
-from supabase import create_client
+try:
+    from langchain_core.documents import Document
+except ImportError:  # pragma: no cover - compatibility with older langchain
+    from langchain.schema import Document  # type: ignore
+from langchain_community.vectorstores import SupabaseVectorStore
 from langchain_ollama import OllamaEmbeddings
+from supabase import create_client
+from postgrest.exceptions import APIError
+
+try:
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+except ImportError:  # pragma: no cover - optional dependency
+    RecursiveCharacterTextSplitter = None
 
 
 load_dotenv()
@@ -11,10 +25,16 @@ SUPABASE_URL = "https://qubthigmzdkdfqrztjhm.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF1YnRoaWdtemRrZGZxcnp0amhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA4NjM4ODAsImV4cCI6MjA3NjQzOTg4MH0.DcRHTJ86LguX7U4EqiG-qrHlIs4D7AZQiVz_Zs0-SJs"
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 EMBED_MODEL = os.environ.get("EMBED_MODEL", "mxbai-embed-large")
+TAILIEU_PATH = Path(os.environ.get("TAILIEU_PATH", (Path(__file__).resolve().parent / "tailieu.txt")))
+TAILIEU_TABLE = os.environ.get("TAILIEU_TABLE", "tailieu_chunks")
+TAILIEU_QUERY_NAME = os.environ.get("TAILIEU_QUERY_NAME", "match_tailieu_chunks")
 
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 emb = OllamaEmbeddings(model=EMBED_MODEL, base_url=OLLAMA_BASE_URL)
+
+_TAILIEU_INDEX_HASH: Optional[str] = None
+_TAILIEU_VECTORSTORE: Optional[SupabaseVectorStore] = None
 
 
 def embed_text(text: str) -> List[float]:
@@ -189,6 +209,212 @@ def run_sql_query(sql: str) -> List[Dict[str, Any]]:
     """
     res = supabase.rpc("query_sql", {"p_sql": sql}).execute()
     return res.data or []
+
+
+def _get_tailieu_vectorstore() -> SupabaseVectorStore:
+    """
+    Lazy instantiate Supabase vector store cho tài liệu tham chiếu.
+    """
+    global _TAILIEU_VECTORSTORE
+    if _TAILIEU_VECTORSTORE is None:
+        _TAILIEU_VECTORSTORE = SupabaseVectorStore(
+            embedding=emb,
+            client=supabase,
+            table_name=TAILIEU_TABLE,
+            query_name=TAILIEU_QUERY_NAME,
+        )
+    return _TAILIEU_VECTORSTORE
+
+
+def _read_tailieu_text() -> str:
+    """
+    Đọc toàn bộ nội dung tailieu.txt (UTF-8). Trả về chuỗi rỗng nếu file không tồn tại.
+    """
+    try:
+        return TAILIEU_PATH.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return ""
+
+
+def _split_tailieu_text(text: str, doc_hash: str) -> List[Document]:
+    """
+    Cắt nhỏ văn bản thành các chunk để nhúng vector. Ưu tiên RecursiveCharacterTextSplitter, fallback thủ công.
+    """
+    if not text.strip():
+        return []
+
+    if RecursiveCharacterTextSplitter:
+        splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=120)
+        chunks = splitter.split_text(text)
+    else:  # pragma: no cover - fallback khi chưa có langchain_text_splitters
+        chunk_size = 800
+        overlap = 120
+        chunks = []
+        start = 0
+        while start < len(text):
+            end = min(len(text), start + chunk_size)
+            chunk = text[start:end].strip()
+            if chunk:
+                chunks.append(chunk)
+            if end == len(text):
+                break
+            start = end - overlap
+
+    documents: List[Document] = []
+    for idx, chunk in enumerate(chunks):
+        cleaned = chunk.strip()
+        if not cleaned:
+            continue
+        documents.append(
+            Document(
+                page_content=cleaned,
+                metadata={
+                    "source": str(TAILIEU_PATH),
+                    "chunk_index": idx,
+                    "doc_hash": doc_hash,
+                },
+            )
+        )
+    return documents
+
+
+def rebuild_tailieu_index(force: bool = False) -> int:
+    """
+    Đọc tailieu.txt, tính hash, và đồng bộ nội dung vào Supabase vector store.
+    Trả về số chunk đã index.
+    """
+    global _TAILIEU_INDEX_HASH
+
+    raw_text = _read_tailieu_text()
+    if not raw_text.strip():
+        _TAILIEU_INDEX_HASH = None
+        return 0
+
+    doc_hash = hashlib.sha256(raw_text.encode("utf-8")).hexdigest()
+    if not force and _TAILIEU_INDEX_HASH == doc_hash:
+        return 0
+
+    documents = _split_tailieu_text(raw_text, doc_hash)
+    if not documents:
+        _TAILIEU_INDEX_HASH = None
+        return 0
+
+    vector_store = _get_tailieu_vectorstore()
+    # Clear existing entries cho nguồn hiện tại trước khi insert mới
+    try:
+        vector_store.delete(filter={"source": str(TAILIEU_PATH)})
+    except ValueError:
+        # Một số phiên bản langchain_community chưa hỗ trợ filter delete -> fallback Supabase client
+        try:
+            supabase.table(TAILIEU_TABLE).delete().eq("metadata->>source", str(TAILIEU_PATH)).execute()
+        except APIError as api_err:
+            if getattr(api_err, "code", None) == "PGRST205":
+                raise RuntimeError(
+                    f"Supabase chưa có bảng '{TAILIEU_TABLE}'. "
+                    "Hãy tạo bảng vector tương thích với SupabaseVectorStore trước khi index tailieu.txt."
+                ) from api_err
+            raise
+    except APIError as api_err:
+        if getattr(api_err, "code", None) == "PGRST205":
+            raise RuntimeError(
+                f"Supabase chưa có bảng '{TAILIEU_TABLE}'. "
+                "Hãy tạo bảng vector tương thích với SupabaseVectorStore trước khi index tailieu.txt."
+            ) from api_err
+        raise
+
+    try:
+        vector_store.add_documents(documents)
+    except APIError as api_err:
+        if getattr(api_err, "code", None) == "PGRST205":
+            raise RuntimeError(
+                f"Supabase chưa có bảng '{TAILIEU_TABLE}'. "
+                "Vui lòng tạo bảng và hàm RPC truy vấn vector trước (ví dụ theo hướng dẫn SupabaseVectorStore)."
+            ) from api_err
+        raise
+    _TAILIEU_INDEX_HASH = doc_hash
+    return len(documents)
+
+
+def _rpc_tailieu_similarity(
+    query: str,
+    *,
+    k: int,
+    threshold: float = 0.35,
+    metadata_filter: Optional[Dict[str, Any]] = None,
+) -> List[tuple[Document, Optional[float]]]:
+    """
+    Fallback RPC search khi SupabaseVectorStore không hỗ trợ trả score kèm kết quả.
+    """
+    query_vector = emb.embed_query(query)
+    payload = {
+        "query_embedding": query_vector,
+        "match_count": k,
+        "match_threshold": threshold,
+        "filter": metadata_filter or {},
+    }
+    try:
+        response = supabase.rpc(TAILIEU_QUERY_NAME, payload).execute()
+    except APIError as api_err:
+        if getattr(api_err, "code", None) == "PGRST205":
+            raise RuntimeError(
+                f"Supabase chưa có bảng '{TAILIEU_TABLE}' hoặc hàm RPC '{TAILIEU_QUERY_NAME}'. "
+                "Vui lòng thiết lập vector store trước khi sử dụng rag_tailieu."
+            ) from api_err
+        raise
+
+    rows = response.data or []
+    results: List[tuple[Document, Optional[float]]] = []
+    for row in rows:
+        metadata = row.get("metadata") or {}
+        if isinstance(metadata, str):
+            try:
+                metadata = json.loads(metadata)
+            except json.JSONDecodeError:
+                metadata = {"raw_metadata": metadata}
+        content = row.get("content") or ""
+        score = row.get("score")
+        if score is None:
+            score = row.get("similarity")
+        results.append((Document(page_content=content, metadata=metadata), score))
+    return results
+
+
+def rag_search_tailieu(
+    query: str,
+    *,
+    k: int = 4,
+    refresh: bool = False,
+) -> List[Dict[str, Any]]:
+    """
+    Tìm kiếm ngữ nghĩa trong tailieu.txt thông qua Supabase vector store.
+    """
+    if refresh:
+        rebuild_tailieu_index(force=True)
+    elif _TAILIEU_INDEX_HASH is None:
+        rebuild_tailieu_index()
+
+    vector_store = _get_tailieu_vectorstore()
+    try:
+        results = vector_store.similarity_search_with_score(query, k=k)
+    except (NotImplementedError, AttributeError):
+        results = _rpc_tailieu_similarity(query, k=k)
+    except APIError as api_err:
+        if getattr(api_err, "code", None) == "PGRST205":
+            raise RuntimeError(
+                f"Supabase chưa có bảng '{TAILIEU_TABLE}' hoặc hàm RPC '{TAILIEU_QUERY_NAME}'. "
+                "Vui lòng thiết lập vector store trước khi sử dụng rag_tailieu."
+            ) from api_err
+        raise
+    payload: List[Dict[str, Any]] = []
+    for doc, score in results:
+        payload.append(
+            {
+                "score": score,
+                "content": doc.page_content,
+                "metadata": doc.metadata,
+            }
+        )
+    return payload
 
 
 if __name__ == "__main__":
@@ -382,3 +608,4 @@ where e.team_name = 'Marketing'
         '2025-10-25 05:45:00+00'::timestamptz and
         '2025-10-25 05:45:00+00'::timestamptz
 """))
+    print(rag_search_tailieu("quy định về phê duyệt ngân sách", k=3, refresh=True))
