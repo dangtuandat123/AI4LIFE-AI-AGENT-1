@@ -15,11 +15,9 @@ def run_app(user_input: str) -> AgentState:
 
 if __name__ == "__main__":
     sample_report = (
-        "Ngày 22/09/2025 lúc 09:00 UTC, nhân viên 11111111-1111-1111-1111-111111111111 thuộc team sale"
-        "Hôm nay em hoàn thành 5 đơn hàng (doanh thu ~ 120 triệu VNĐ) cho dự án Alpha, chi hết 3 triệu tiền quảng cáo Facebook"
+        "Ngày 22/09/2025 lúc 09:00 UTC, nhân viên 11111111-1111-1111-1111-111111111111 thuộc team sale. "
+        "Hôm nay em hoàn thành 5 đơn hàng (doanh thu ~ 120 triệu VND) cho dự án Alpha, chi hết 3 triệu quảng cáo Facebook. "
         "activity_type: revenue"
-
-        
     )
     result_state = run_app(sample_report)
     final_response = result_state.get("final_response")

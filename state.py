@@ -1,4 +1,4 @@
-from typing import List, Optional, Any, Literal, TypedDict
+from typing import Any, Dict, List, Literal, Optional, TypedDict
 from pydantic import BaseModel, Field
 from langchain_core.messages import BaseMessage
 
@@ -20,7 +20,7 @@ class RouterResponse(BaseModel):
 class AgentState(TypedDict, total=False):
     messages: List[BaseMessage]
     route_response: RouterResponse
-    agent_response: Optional[str]
+    agent_response: Optional[Dict[str, Any]]
     checkbudget_response: Optional[CheckBudgetResponse]
     final_response: Optional[FinalResponse]
     agent_last: Optional[str]

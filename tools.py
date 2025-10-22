@@ -82,7 +82,6 @@ class RagTailieuArgs(BaseModel):
     "search_web",
     description="Tìm kiếm thông tin trên Internet bằng công cụ Tavily. Trả về JSON string hoặc kết quả tìm kiếm dưới dạng text.",
     args_schema=SearchWebArgs,
-    return_direct=True
 )
 def search_web(query: str) -> str:
     """Tìm kiếm thông tin trên Internet bằng Tavily."""
@@ -96,7 +95,6 @@ def search_web(query: str) -> str:
 @tool(
     "run_supabase_sql",
     description="Kiểm tra ngân sách có phù hợp hay không dựa trên các tiêu chí đã cho.",
-    return_direct=True,
     args_schema=RunSupabaseSQLArgs,
 )
 def run_supabase_sql(sql_query: str) -> str:
@@ -128,7 +126,6 @@ def run_supabase_sql(sql_query: str) -> str:
     "run_python_code",
     description="Chạy nhanh một đoạn code Python thuần để tính toán hoặc biến đổi dữ liệu (dựa trên PythonREPLTool của LangChain).",
     args_schema=ExecutePythonArgs,
-    return_direct=True,
 )
 def run_python_code(code: str) -> str:
     """
@@ -151,7 +148,6 @@ def run_python_code(code: str) -> str:
     "rag_tailieu",
     description="Truy vấn tri thức nội bộ từ tailieu.txt thông qua Supabase vector store.",
     args_schema=RagTailieuArgs,
-    return_direct=True,
 )
 def rag_tailieu(query: str, top_k: int = 4, refresh_index: bool = False) -> str:
     """

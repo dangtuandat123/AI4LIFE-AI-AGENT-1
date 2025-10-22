@@ -100,27 +100,28 @@ def checkbudget_agent(state: AgentState) -> AgentState:
         state["messages"].append(AIMessage(content=error_msg))
 
     llm = create_agent_react(
-        tools=[rag_tailieu,search_web],
+        tools=[rag_tailieu, run_supabase_sql, run_python_code, search_web],
         response_struct=CheckBudgetResponse,
         system_prompt=SYSTEM_PROMPT_CHECKBUDGET_AGENT,
     )
     response = invoke_with_retry(
         llm,
-        {
-           "messages": state["messages"]
-        },
+        {"messages": state["messages"]},
         state,
         "Checkbuget  Agent",
-        reminder="Vui lòng trả JSON đúng schema RouterResponse.",
+        reminder="Vui lòng trả JSON đúng schema CheckBudgetResponse.",
     )
     print_colored(response, "cyan")
 
-   
-
-    state["messages"] = response['messages']
+    state["messages"] = response.get("messages", state["messages"])
     state["agent_response"] = response
+    structured = response.get("structured_response")
+    state["checkbudget_response"] = structured
     state["agent_last"] = "checkbudget_agent"
-    print_colored(f"CheckBudget Agent Response:\n {response['messages']}", "yellow")
+    print_colored(
+        f"CheckBudget Agent Response:\n {structured}",
+        "yellow",
+    )
     return state
 
 
