@@ -1,5 +1,4 @@
 import json
-import math
 import os
 from typing import Any, Dict
 
@@ -9,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from postgrest.exceptions import APIError
 
+from langchain_experimental.tools.python.tool import PythonREPLTool
 from supabase_tool import rag_search_tailieu, rebuild_tailieu_index, run_sql_query
 from utils import print_colored
 try:
@@ -126,51 +126,25 @@ def run_supabase_sql(sql_query: str) -> str:
 
 @tool(
     "run_python_code",
-    description="Chạy nhanh một đoạn code Python thuần để tính toán hoặc biến đổi dữ liệu.",
+    description="Chạy nhanh một đoạn code Python thuần để tính toán hoặc biến đổi dữ liệu (dựa trên PythonREPLTool của LangChain).",
     args_schema=ExecutePythonArgs,
     return_direct=True,
 )
 def run_python_code(code: str) -> str:
     """
-    Execute a small Python snippet for calculations. No external imports allowed.
+    Execute a small Python snippet for calculations using LangChain's built-in Python REPL tool.
     """
     print(f"[Tool] run_python_code received:\n{code}")
-    allowed_builtins = {
-        "abs": abs,
-        "min": min,
-        "max": max,
-        "sum": sum,
-        "len": len,
-        "round": round,
-        "sorted": sorted,
-        "enumerate": enumerate,
-        "range": range,
-        "zip": zip,
-        "math": math,
-    }
-    sandbox_globals = {"__builtins__": allowed_builtins}
-    sandbox_locals: Dict[str, Any] = {}
-
+    repl_tool = PythonREPLTool()
     try:
-        compiled = compile(code, "<agent_code>", "exec")
-        exec(compiled, sandbox_globals, sandbox_locals)
+        output = repl_tool.run(code)
     except Exception as exc:  # pragma: no cover - guardrail
         error_msg = f"[ERROR] Python execution failed: {exc}"
         print_colored(error_msg, "red")
         return error_msg
-
-    result = sandbox_locals.get("result")
-    if result is None:
-        result_repr = "[INFO] Python code ran successfully nhưng không có biến 'result'."
-    else:
-        try:
-            result_repr = json.dumps(result, ensure_ascii=False)
-        except TypeError:
-            result_repr = str(result)
-
-    print_colored(result_repr, "cyan")
+    print_colored(output, "cyan")
     print("[Tool] run_python_code completed")
-    return result_repr
+    return output
 
 
 @tool(
@@ -186,8 +160,16 @@ def rag_tailieu(query: str, top_k: int = 4, refresh_index: bool = False) -> str:
     print(f"[Tool] rag_tailieu called with query: {query} | top_k={top_k} | refresh={refresh_index}")
     if refresh_index:
         rebuild_tailieu_index(force=True)
-    results = rag_search_tailieu(query, k=top_k, refresh=False)
+    results_raw = rag_search_tailieu(query, k=top_k, refresh=False)
+    results = []
+    for item in results_raw:
+        entry: Dict[str, Any] = {"content": item.get("content")}
+        score = item.get("score")
+        if score is not None:
+            entry["score"] = score
+        results.append(entry)
     payload = json.dumps(results, ensure_ascii=False, indent=2)
     print_colored(payload, "magenta")
     print("[Tool] rag_tailieu completed")
+    
     return payload

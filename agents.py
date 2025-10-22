@@ -6,8 +6,6 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from prompts import (
     SYSTEM_PROMPT_CHECKBUDGET_AGENT,
     SYSTEM_PROMPT_FINAL_AGENT,
-    SYSTEM_PROMPT_PLANNER_AGENT,
-    SYSTEM_PROMPT_QUERY_AGENT,
     SYSTEM_PROMPT_ROUTER_AGENT,
 )
 from state import AgentState, FinalResponse, RouterResponse
@@ -80,104 +78,6 @@ def router_agent(state: AgentState) -> AgentState:
     return state
 
 
-def planner_agent(state: AgentState) -> AgentState:
-    """Outline the plan for the upcoming query steps."""
-    print_colored("Planner Agent Invoked", "green")
-
-    llm = create_agent_basic()
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            ("system", SYSTEM_PROMPT_PLANNER_AGENT),
-            MessagesPlaceholder(variable_name="messages"),
-        ]
-    )
-    chain = prompt | llm
-    response = invoke_with_retry(
-        chain,
-        {"messages": state["messages"]},
-        state,
-        "Planner Agent",
-    )
-    state["messages"].append(response)
-    state["agent_response"] = response.content
-    state["agent_last"] = "planner_agent"
-    print_colored(f"Planner Agent Response:\n {response.content}", "yellow")
-    return state
-
-
-def query_agent(state: AgentState) -> AgentState:
-    """Generate and execute Supabase SQL when enough data is available."""
-    print_colored("Query Agent Invoked", "green")
-
-    agent = create_agent_react(
-        tools=[search_web, run_supabase_sql, run_python_code],
-        system_prompt=SYSTEM_PROMPT_QUERY_AGENT,
-    )
-    conversation: List[BaseMessage] = list(state["messages"])
-    schema_info = state.get("schema_info", "")
-    if schema_info:
-        conversation.append(
-            HumanMessage(
-                content=(
-                    "Lưu ý: đây là schema Supabase hiện tại để tham chiếu khi lập kế hoạch và truy vấn:\n"
-                    f"{schema_info}"
-                )
-            )
-        )
-    conversation.append(
-        HumanMessage(
-            content=(
-                "Dựa vào yêu cầu ban đầu, hãy tạo câu lệnh SQL để truy vấn cơ sở dữ liệu Supabase "
-                "và kiểm tra ngân sách hiện tại có hợp lý hay không. "
-                "Nếu dữ liệu Supabase chưa đủ, hãy dùng thêm công cụ search_web để tìm thông tin hỗ trợ. "
-                "Nếu công cụ báo lỗi, bạn PHẢI đọc kỹ thông báo, sửa lại câu truy vấn và chạy lại. "
-                "Mọi phản hồi phải bằng tiếng Việt tự nhiên."
-            )
-        )
-    )
-
-    max_attempts = 3
-    last_ai_message: AIMessage | None = None
-
-    for attempt in range(1, max_attempts + 1):
-        result_state = invoke_with_retry(
-            agent,
-            {"messages": conversation},
-            state,
-            "Query Agent",
-        )
-        if isinstance(result_state, dict) and "messages" in result_state:
-            conversation = result_state["messages"]
-
-        last_ai_message = next(
-            (msg for msg in reversed(conversation) if isinstance(msg, AIMessage)),
-            None,
-        )
-        if last_ai_message is None:
-            raise RuntimeError("Query Agent did not return an AIMessage response.")
-
-        if "[ERROR] Supabase query failed" in last_ai_message.content and attempt < max_attempts:
-            print_colored(
-                f"Query Agent detected SQL error, prompting retry (attempt {attempt + 1}/{max_attempts}).",
-                "red",
-            )
-            conversation.append(
-                HumanMessage(
-                    content=(
-                        "Công cụ Supabase báo lỗi ở truy vấn vừa rồi. "
-                        "Hãy phân tích thông báo lỗi, điều chỉnh câu SQL cho đúng cú pháp và chạy lại ngay."
-                    )
-                )
-            )
-            continue
-        break
-
-    state["messages"] = conversation
-    state["agent_response"] = last_ai_message.content if last_ai_message else None
-    state["agent_last"] = "query_agent"
-    print_colored(f"Query Agent Response:\n {state['agent_response']}", "yellow")
-    return state
-
 
 def checkbudget_agent(state: AgentState) -> AgentState:
     """Hybrid ReAct agent có RAG tailieu.txt và kiểm tra ngân sách."""
@@ -199,7 +99,7 @@ def checkbudget_agent(state: AgentState) -> AgentState:
         state["messages"].append(AIMessage(content=error_msg))
 
     agent = create_agent_react(
-        tools=[rag_tailieu, run_supabase_sql, run_python_code, search_web],
+        tools=[rag_tailieu, run_python_code],
         system_prompt=SYSTEM_PROMPT_CHECKBUDGET_AGENT,
     )
 

@@ -7,8 +7,8 @@ class FinalResponse(BaseModel):
     status: bool = Field(description="raw_input có đầy đủ thông tin hay không.")
    
 class RouterResponse(BaseModel):
-    agent_current: Literal["node_get_schema", "router_agent", "planner_agent", "query_agent", "checkbudget_agent", "final_agent"] = Field(description="agent hiện tại đang thực thi.")
-    next_agent: Literal["planner_agent", "checkbudget_agent", "final_agent", "query_agent"] = Field(description="agent tiếp theo sẽ thực hiện.")
+    agent_current: Literal["node_get_schema", "router_agent", "checkbudget_agent", "final_agent"] = Field(description="agent hiện tại đang thực thi.")
+    next_agent: Literal["checkbudget_agent", "final_agent"] = Field(description="agent tiếp theo sẽ thực hiện.")
     reason: Optional[str] = Field(description="Lý do chuyển đổi agent, nếu có.")
     null_fields: Optional[List[str]] = Field(description="Danh sách các trường dữ liệu còn thiếu so với schema.")
 
